@@ -1,0 +1,232 @@
+function autoEmailMaterials(e) {
+  // Configuration --> who the emails are sent to
+  var ROVER_RECIPIENTS = "exampleEmail@WorcesterMA.gov";
+
+  // Capture form submission data 
+  var values = e ? e.namedValues : null;
+  if (!values) {
+    Logger.log("CRITICAL ERROR: No event payload received.");
+    return;
+  }
+  
+  Logger.log("Available Form Questions: " + Object.keys(values).join(", "));
+
+  var parkSite = values['Select Park'] ? values['Select Park'][0] : null;
+  var logType = values['Week'] ? values['Week'][0] : null;
+  
+  if (!parkSite || !logType) {
+    Logger.log("CRITICAL ERROR: Could not find 'Select Park' or 'Week'.");
+    return; 
+  }
+  
+  var cleanLogType = logType.toString().trim();
+  var rawActivities = "";
+
+  // Dynamic question field resolution
+  if (cleanLogType.includes("Weekly") || cleanLogType.includes("Recurring")) { 
+    rawActivities = values['Select Weekly Activity'] ? values['Select Weekly Activity'][0] : ""; 
+  } else if (cleanLogType === "Other") { 
+    rawActivities = values['General Supplies / Other'] ? values['General Supplies / Other'][0] : ""; 
+  } else {
+    // Dynamically matches "Week 1", "Week 2", ... "Week 6"
+    var weekMatch = cleanLogType.match(/Week\s*\d+/i);
+    var questionKey = weekMatch ? "Select " + weekMatch[0] + " Activity" : "";
+    rawActivities = (questionKey && values[questionKey]) ? values[questionKey][0] : "";
+  }
+
+  if (!rawActivities) {
+    Logger.log("Exited safely: No matching activity selection found in the form data.");
+    Logger.log("DIAGNOSTIC - The form passed the Week as: [" + cleanLogType + "]");
+    return;
+  }
+
+  // 3. Inventory Master Catalog
+  var rawCatalog = {
+    // --- WEEK 1 ---
+    "Hero Emblem Banner": "Construction paper, Pre-cut shield/star/circle templates, Markers/crayons, Stickers, Tape/stapler, Yarn or ribbon",
+    "Superhero Symbol": "Felt, scissors, glue, safety pins",
+    "Comic Creators": "White or construction paper, pencils, markers and crayons",
+    "Look Mamma Super Strength": "Sheets of paper, rubber bands, books (or other small weights), string or rope, a sturdy stick, ruler, or rolling pin (to act as a pulley), optional small buckets or containers to hold weights",
+    "Super Secret Identities": "Paper, pencils, colored pencils or markers (optional), whiteboard or chart paper, list of guiding questions",
+    "Super Senses": "A box or bag (not see-through), safe mystery items (cotton ball, spoon, pinecone, small toy, fruit, fabric), cloth or lid to cover opening",
+    "Heroes vs. Villains": "Reusable water balloons, buckets filled with water, water shooters",
+    "Super Missions": "Index cards or paper with missions, mission box, simple props for obstacle course (cones, balls, ropes, hoops, chairs), optional superhero-themed music, timer (optional)",
+    "Super Coders": "Large grid drawn on floor (tape or chalk), Superhero game pieces/tokens, Mission cards with destinations, Code cards (forward, turn left, turn right, repeat, conditional), Optional obstacles, Paper and pencils, Timer (optional)",
+    "Spiderman Webs": "White glue, liquid starch or liquid laundry detergent, water, food coloring or glow-in-the-dark paint (optional), mixing bowls, spoons or popsicle sticks, disposable gloves (optional), paper towels",
+    "Wicked Web Shooters": "Empty paper towel or toilet paper rolls, rubber bands, string or yarn, tape, scissors, small pom-poms or lightweight paper balls, markers or stickers, optional plastic cups or paper cones",
+    "Kryptonite Crystal Grow": "Borax, table salt, or sugar, water, measuring cups, clear jars or cups, pipe cleaners or string, pencils or sticks, food coloring (optional), spoon or stirrer",
+    "Power Up Relay": "Cones, relay markers, miscellaneous group activity props",
+
+    // --- WEEK 2 ---
+    "World Cup - Teams & Countries": "Triangle pennant templates, String, Hole punch, Markers, Tape/stapler, Stickers",
+    "Design Your Jersey Pt. 2": "Dried tie-dye shirts from Day 1, fabric markers, fabric glue, felt sheets, scissors, stencils or templates",
+    "Stained-Glass Flags": "Colored tissue paper",
+    "Cardboard and Pom Pom Soccer": "Cardboard, pom-poms",
+    "Build Your Own Stadium": "Recycled and craft materials",
+    "Soccer News Headlines": "Paper, pencils, optional markers, soccer images or mini scenario prompts",
+    "Soccer Similes": "Notebook or paper, pencils",
+    "Shoot Out Showdown": "Soccer balls, cones, pinnies or jerseys, portable goals",
+    "Passing": "Soccer balls, cones, pinnies, marked playing area",
+    "Construction Challenge: Ball in the Goal": "Ramp building materials, balls, goals",
+    "Tennis Skills": "Tennis rackets, beach balls, red tennis balls",
+    "Volleyball Skills": "Beach ball",
+
+    // --- WEEK 3 ---
+    "Alien Trading Cards": "Index cards, Markers, Colored pencils, Tape, Stickers",
+    "Solar System Mobile / Painting Planets": "Styrofoam balls in various sizes, acrylic paint, paint brushes, cups of water, paper plates or paint trays, markers, toothpicks or skewers, string or fishing line, tape, scissors, glue, yarn, sticks/dowels/hangers for mobiles, newspaper or table covers, planet reference images, clothespins or clips, one larger styrofoam ball for the sun",
+    "Galaxy Jars": "Jars, water, paint, glow in the dark paint, cotton balls, glitter",
+    "Space Invaders": "Balls, cones or markers",
+
+    // --- WEEK 4 ---
+    "Worcester Map Mosaic": "Paper squares, Markers/crayons, Stickers, Tape, Large butcher paper",
+    "Mock Election Pt. 1": "Paper, markers, tape, optional props for demonstration (balls, cones, etc.), clipboards or tables for display.",
+    "Youth Worker Election": "Paper, pencils, markers, optional badges or props, clipboards.",
+    "Balloon Car": "Balloon car kits or components for each group (balloon, cardboard or lightweight base, 4 wheels - e.g., bottle caps or spools - skewers/axles, tape, straws, scissors with supervision), markers or stickers for decoration, a flat surface to test and race cars, optional measuring tape or chalk for marking distances.",
+    "If We Ran Our Park": "Paper or poster paper, markers or colored pencils, clipboards or something to write on (optional if outside).",
+    "Community Leader Profile": "Poster board or large paper, markers, crayons, colored pencils, paint, magazines for collage, scissors, glue, tape, construction paper, stickers, index cards, pencils.",
+    "Athletics Park Scavenger Hunt": "Blank checklist sheets or index cards, clipboards or paper, pencils, markers, optional stopwatch or timer, water for hydration.",
+    "City Jobs Profile": "no materials needed for this activity",
+    "Worcester Inventors": "Cardboard (such as boxes or cereal boxes), tape (masking or duct), string or yarn, plain and colored paper, markers, crayons or colored pencils, scissors, aluminum foil, plastic cups or containers, popsicle sticks, rubber bands, glue, and optional recycled materials like bottle caps or fabric scraps",
+    "Map Our Parks": "Large paper, cardboard, recycled boxes, markers, crayons, colored pencils, paint, paintbrushes, glue, tape, scissors, popsicle sticks, construction paper, string or yarn, toilet paper rolls, bottle caps, pipe cleaners, natural materials (sticks, leaves, rocks), stickers, and any other craft or recycled materials available.",
+    "Worcester Then and Now": "Paper, pencils or pens, optional printed facts about Worcester history, markers or crayons.",
+    "City Headlines": "Paper, pencils, markers, optional scenario cards/images.",
+    "City Tour Guide": "Paper, pencils, markers, optional printed map",
+    "WooSox Home Run Derby": "Wiffle ball bat, wiffle balls",
+    "Kickball": "kickball, four bases (cones, mats, or markers), and optional pinnies to differentiate teams",
+    "Six Base Kickball": "kickball, six bases (cones or markers), and optional pinnies for teams.",
+    "Water Balloon Kickball": "kickball, bases, several water balloons per player, and buckets to hold extra balloons.",
+    "Obstacle Kickball": "kickball, bases, and safe obstacles (cones, ropes, hoops, chairs).",
+    "Blob Tag": "Open Space, Cones",
+    "Worcester Mascots": "Large sheets of butcher paper, markers, crayons, colored pencils, construction paper, scissors, glue, tape, pipe cleaners, stickers, and any other arts and crafts materials available.",
+    "Basic Tennis Skills": "Tennis rackets, beach balls, red tennis balls.",
+    "Flag Football": "Football, flags, flag belt",
+    "Zombified!": "no materials needed for this activity",
+    "Rec Woo DJs": "Paper, pencils",
+    "Basic Volleyball Skills": "One beach ball, can use two if youth need an additional challenge.",
+    "Capture the Flag": "2 flags, rope or tape, hula hoops, cones",
+    "Extreme Marco Polo": "buckets of water, cones, water guns",
+    "Drip, Drip, Drop": "Sponges and buckets of water",
+    "Splash Up, 7 Up": "Sponges and buckets of water",
+    "Water Races": "two buckets, cup or sponge",
+    "Water Balloon Dodgeball": "A pack of 50 - 100 water balloons, a water balloon nozzles to fill the water balloons, a bucket for the filled water balloons, colored tape, a watch/timer set to 15 minutes",
+    "Water Balloon Target Practice": "Spray bottles or water blasters, plastic cups (one per team), large bucket or container of water, cones or markers for start line, open outdoor space",
+
+    // --- WEEK 5 ---
+    "Clue Web": "Index cards, Yarn, Tape, Markers, Sticky notes",
+    "Park Detectives": "Paper or notebooks, Pencils, Clipboards (optional)",
+    "Mystery Goo": "Clear plastic bags (sandwich size), multi-purpose glue, warm water, borax (or safe alternative), cornstarch, talcum powder or salt, measuring spoons and cups, mixing bowls, disposable cups, toothpicks or plastic straws (broken in half to use as small pipettes), table coverings, paper towels for cleanup.",
+    "Disguise Making": "Cardboard, construction paper, pipe cleaners, pom-poms, markers, pens, pencils, glue, tape, scissors, string, elastic bands, optional stickers or small accessories",
+    "Disguise Making (Monster Mask)": "Cardboard or cardstock for the mask base, construction paper, pipe cleaners, pom-poms, markers, crayons, colored pencils, glue, tape, scissors, string or elastic bands for wearing masks, optional stickers, feathers, or other small accessories for decoration.",
+    "Werewolf": "A deck of cards or slips of paper to assign roles (e.g., Werewolf, Villager, Seer, Doctor, etc.), a large open space or circle where all players can sit or stand, and optional pinnies or wristbands to help younger youth keep track of roles.",
+    "Blindfolded Tag": "Blindfolds, pool noodles, cones for boundaries",
+    "Blindfold Obstacle Course": "Blindfolds, cones, ropes, chalk or tape for boundaries, small safe obstacles (cones, sticks, hula hoops)",
+    "Water Hazard Heist": "Water guns or spray bottles, sprinklers, cones, ropes for boundaries, small prize (toy, token, or sticker)",
+    "Fishy Fishy Team Escape": "Open play area, cones to mark boundaries, pinnies optional for Sharks, optional “safe zones” marked by cones or mats.",
+    "Fishy Fishy Treasure Chase": "Open play area with boundaries, small objects or “treasures” to place around the field, pinnies optional for Sharks.",
+    "Invisible Ink": "Lemon juice or vinegar, Cotton swabs or small paintbrushes, White paper, Small bowls or cups, Optional: markers or colored pencils for decorating",
+    "Camp Rescue Mission (Easy Mode)": "Index cards, markers, tape or clips, small treasure box/bag, optional nature props (sticks, rocks, cones)",
+    "Camp Rescue Mission (Hard Mode)": "Index cards, markers, tape or clips, small treasure box/bag, optional nature props (sticks, rocks, cones)",
+    "What’s in the Box": "Cardboard boxes, craft supplies, silly creations, Optional: Pencils and Paper",
+    "Mystery Bag Construction Challenge": "bag with 3-5 random objects: pipe cleaners, rubber bands, paper clips, plastic cups, aluminum foil, straws, etc. , Paper, Pencils",
+    "Escape Room": "Clue cards, envelopes, simple puzzle/ riddles, cones, treasure, paper and pencils",
+    "Who Stole the Parachute": "Open area, cones, parachute",
+
+    // --- WEEK 6 ---
+    "Spotlight Stars Wall": "Star cutouts , Markers , Tape , Stickers/glitter",
+    "End of Summer Memory Book": "Construction paper (various colors), pipe cleaners, yarn, string, ribbon, three-hole punch, markers, crayons, colored pencils, stickers, glue, tape, optional stencils",
+    "Setting the Scene - Talent Show Introduction": "no materials needed for this activity",
+    "Theater Day One": "Paper, pencils, markers, cardboard, tape, scissors, craft supplies, optional costumes",
+    "Theater Day Two": "no materials needed for this activity",
+    "Theater Day Three": "no materials needed for this activity",
+    "Theater Day Four": "no materials needed for this activity",
+    "Theater Day Five": "no materials needed for this activity",
+    "Dance Routine Day One": "Music, open space, optional props (scarves, hats, glow sticks), optional sports equipment",
+    "Dance Routine Day Two": "no materials needed for this activity",
+    "Dance Routine Day Three": "no materials needed for this activity",
+    "Dance Routine Day Four": "no materials needed for this activity",
+    "Dance Routine Day Five": "no materials needed for this activity",
+    "Tennis - Don't Touch The Ground": "Tennis rackets, beach balls, red tennis balls",
+    "Make Your Mark": "Butcher paper, makers, crayons, paint, glitter, glue",
+    "Volleyball": "Beach ball(s), more if needed"
+  };
+
+  // Build a normalized (lowercase) catalog map for guaranteed case-insensitive matching
+  var catalog = {};
+  var catalogKeysByLength = [];
+  
+  for (var key in rawCatalog) {
+    catalog[key.toLowerCase()] = rawCatalog[key];
+    catalogKeysByLength.push(key);
+  }
+  
+  // Sort catalog keys by length (longest first) to accurately match multi-word / comma titles
+  catalogKeysByLength.sort(function(a, b) { return b.length - a.length; });
+
+  // 4. Activity matching and HTML building
+  var formattedActivityNames = "";
+  var formattedMaterialsBody = "";
+
+  if (cleanLogType === "Other") {
+    formattedActivityNames = "General Supplies / Custom Request";
+    formattedMaterialsBody = "<ul style='margin: 0; padding-left: 20px;'><li style='margin-bottom: 8px;'><strong>Custom Request:</strong> " + rawActivities + "</li></ul>";
+  } else {
+    var materialsHtmlList = [];
+    var cleanActivityNames = [];
+    var remainingText = rawActivities.toLowerCase();
+
+    // Match catalog keys directly against raw response to safely handle titles with commas
+    for (var k = 0; k < catalogKeysByLength.length; k++) {
+      var originalKey = catalogKeysByLength[k];
+      var lowerKey = originalKey.toLowerCase();
+
+      if (remainingText.indexOf(lowerKey) !== -1) {
+        cleanActivityNames.push(originalKey);
+        var itemsNeeded = catalog[lowerKey];
+        materialsHtmlList.push("<li style='margin-bottom: 8px;'><strong>" + originalKey + ":</strong> " + itemsNeeded + "</li>");
+        // Remove matched key from search string to prevent false double-matches (e.g. Kickball inside Six Base Kickball)
+        remainingText = remainingText.replace(lowerKey, "");
+      }
+    }
+
+    // Fallback split match if no catalog key matched directly
+    if (cleanActivityNames.length === 0) {
+      var fallbackItems = rawActivities.split(/,\s*/);
+      for (var f = 0; f < fallbackItems.length; f++) {
+        var item = fallbackItems[f].trim();
+        if (item) {
+          cleanActivityNames.push(item);
+          materialsHtmlList.push("<li style='margin-bottom: 8px;'><strong>" + item + ":</strong> No specialized items listed in system.</li>");
+        }
+      }
+    }
+
+    formattedActivityNames = cleanActivityNames.join(", ");
+    formattedMaterialsBody = "<ul style='margin: 0; padding-left: 20px;'>" + materialsHtmlList.join("") + "</ul>";
+  }
+
+  // 5. Draft and send email
+  var subject = "NEW SUPPLY REQUEST: " + parkSite + " [" + logType + "]";
+  
+  var htmlBody = "<div style='font-family: Arial, sans-serif; padding: 15px; border: 1px solid #ddd; border-radius: 5px; max-width: 600px;'>" +
+                   "<h2 style='color: #E67E22; margin-top: 0;'>Recreation Worcester Rover Dispatch</h2>" +
+                   "<p>A new activity log submission requires supplies. Check the tracking sheet to claim this run.</p>" +
+                   "<table style='width: 100%; border-collapse: collapse; margin: 15px 0;'>" +
+                     "<tr style='background-color: #f9f9f9;'><td style='padding: 8px; font-weight: bold; width: 30%;'>Park Site:</td><td style='padding: 8px; font-weight: bold; color: #2C3E50;'>" + parkSite + "</td></tr>" +
+                     "<tr><td style='padding: 8px; font-weight: bold;'>Activities:</td><td style='padding: 8px;'>" + formattedActivityNames + "</td></tr>" +
+                     "<tr style='background-color: #f9f9f9;'><td style='padding: 8px; font-weight: bold;'>Curriculum Schedule:</td><td style='padding: 8px;'>" + logType + "</td></tr>" +
+                   "</table>" +
+                   "<h4 style='color: #d9534f; margin-bottom: 10px;'>Required Inventory Components:</h4>" +
+                   "<div style='background-color: #fcf8e3; border: 1px solid #faebcc; padding: 15px; border-radius: 4px; color: #333; font-size: 14px; line-height: 1.5;'>" + 
+                     formattedMaterialsBody + 
+                   "</div>" +
+                   "<p style='font-size: 12px; color: #777; margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px; text-align: center; font-style: italic;'>" +
+                     "Coordination Step: Please open the backend tracking sheet, put your initials under 'Claimed By', and check the box when delivery is complete." +
+                   "</p>" +
+                 "</div>";
+
+  MailApp.sendEmail({
+    to: ROVER_RECIPIENTS,
+    subject: subject,
+    htmlBody: htmlBody
+  });
+}
